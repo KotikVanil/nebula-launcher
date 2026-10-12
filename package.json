@@ -1,0 +1,50 @@
+{
+  "name": "nebula-launcher",
+  "productName": "Nebula Launcher",
+  "version": "1.0.0",
+  "description": "Minecraft launcher with instances, Modrinth, skins and an AI modpack workshop",
+  "main": "src/main/main.js",
+  "author": "IVAN",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "shots": "electron . --shots",
+    "mcp": "node mcp/server.mjs",
+    "dist": "electron-builder --win nsis"
+  },
+  "bin": {
+    "nebula": "cli/nebula.js"
+  },
+  "dependencies": {
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@fontsource/manrope": "^5.3.0",
+    "@fontsource/unbounded": "^5.3.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "adm-zip": "^0.6.1",
+    "dompurify": "^3.4.16",
+    "lucide": "^1.55.0",
+    "marked": "^18.1.0",
+    "skinview3d": "^3.4.2",
+    "three": "^0.186.1",
+    "zod": "^4.6.6"
+  },
+  "devDependencies": {
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.nebula.launcher",
+    "productName": "Nebula Launcher",
+    "directories": { "output": "dist" },
+    "files": ["src/**/*", "mcp/**/*", "cli/**/*", "docs/**/*", "assets/**/*", "package.json"],
+    "asar": false,
+    "win": { "target": "nsis", "icon": "assets/icon.ico" },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Nebula Launcher"
+    }
+  }
+}

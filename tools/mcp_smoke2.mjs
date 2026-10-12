@@ -1,0 +1,12 @@
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+const t = new StdioClientTransport({ command: process.execPath, args: ['mcp/server.mjs'], env: { ...process.env } });
+const c = new Client({ name: 'smoke', version: '1' });
+await c.connect(t);
+const call = async (name, args) => { const r = await c.callTool({ name, arguments: args }, undefined, { timeout: 300000 }); return JSON.parse(r.content[0].text.replace(/^Ошибка: /, '"') ); };
+const a = await call('add_mods', { instance: 'vyzhivanie-s-create', projects: ['sodium', 'create-fabric', 'jei', 'xaeros-minimap'] });
+console.log('installed', a.installed.map(x => x.title + (x.asDependency ? '*' : '')).join(', '));
+console.log('failed', JSON.stringify(a.failed), 'conflicts', JSON.stringify(a.conflicts));
+const ch = await call('check_instance', { instance: 'vyzhivanie-s-create' });
+console.log('check', JSON.stringify(ch).slice(0, 600));
+await c.close();

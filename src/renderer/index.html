@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' file: data: blob: https:; font-src 'self' data:; connect-src 'self' https: file: data: blob:; media-src 'self' data: blob:">
+  <title>Nebula Launcher</title>
+  <link rel="stylesheet" href="../../node_modules/@fontsource/unbounded/400.css">
+  <link rel="stylesheet" href="../../node_modules/@fontsource/unbounded/600.css">
+  <link rel="stylesheet" href="../../node_modules/@fontsource/unbounded/700.css">
+  <link rel="stylesheet" href="../../node_modules/@fontsource/unbounded/800.css">
+  <link rel="stylesheet" href="../../node_modules/@fontsource/manrope/400.css">
+  <link rel="stylesheet" href="../../node_modules/@fontsource/manrope/600.css">
+  <link rel="stylesheet" href="../../node_modules/@fontsource/manrope/700.css">
+  <link rel="stylesheet" href="../../node_modules/@fontsource/manrope/800.css">
+  <link rel="stylesheet" href="../../node_modules/@fontsource/jetbrains-mono/400.css">
+  <link rel="stylesheet" href="css/app.css">
+  <script src="../../node_modules/lucide/dist/umd/lucide.min.js"></script>
+  <script src="../../node_modules/marked/lib/marked.umd.js"></script>
+  <script src="../../node_modules/dompurify/dist/purify.min.js"></script>
+  <script src="../../node_modules/skinview3d/bundles/skinview3d.bundle.js"></script>
+</head>
+<body>
+  <div id="bg-fallback"></div>
+  <canvas id="bg-canvas"></canvas>
+  <div id="bg-vignette"></div>
+  <div id="grain"></div>
+  <div id="app"></div>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

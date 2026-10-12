@@ -1,0 +1,12 @@
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+const t = new StdioClientTransport({ command: process.execPath, args: ['mcp/server.mjs'], env: { ...process.env } });
+const c = new Client({ name: 'smoke', version: '1' });
+await c.connect(t);
+const tools = await c.listTools();
+console.log('tools', tools.tools.length, tools.tools.map(x => x.name).join(','));
+const r = await c.callTool({ name: 'list_instances', arguments: {} });
+console.log(r.content[0].text.slice(0, 200));
+const s = await c.callTool({ name: 'search_mods', arguments: { query: 'create', instance: 'vyzhivanie-s-create', limit: 3 } });
+console.log(s.content[0].text.slice(0, 400));
+await c.close();
