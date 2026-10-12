@@ -7,6 +7,7 @@ const core = require('../core');
 const tasks = require('./tasks');
 const ai = require('./ai');
 const mctextures = require('../core/mctextures');
+const updater = require('./updater');
 
 const DEV = process.argv.includes('--dev');
 const SHOTS = process.argv.some((a) => a.startsWith('--shots'));
@@ -170,6 +171,10 @@ const api = {
     if (!out.canceled) fs.copyFileSync(s.path, out.filePath);
     return !out.canceled;
   },
+
+  // self-update from GitHub Releases
+  'update.check': () => updater.check(),
+  'update.install': () => tasks.run('Обновление лаунчера', { kind: 'update' }, (t) => updater.install(t)),
 
   // real Minecraft textures + default skins read from the local client jar
   'textures.get': async () => {

@@ -3,6 +3,7 @@ import { h, icon, btn, toast, switchEl, rangeEl, select, confirmDialog, fmtBytes
 import { openLogin } from './account.js';
 import { headFor } from '../app.js';
 import { sfx } from '../sound.js';
+import { checkForUpdates } from '../update.js';
 
 const ACCENTS = [
   ['nebula', 'Туманность', '#8b5cf6', '#22d3ee'], ['emerald', 'Изумруд', '#10b981', '#a3e635'], ['ember', 'Лава', '#f97316', '#facc15'],
@@ -82,6 +83,9 @@ export async function render(root, params = {}) {
         h('.set-row', h('.lbl', h('b', 'Папка лаунчера'), h('span.mono', { style: { userSelect: 'text' } }, info.root)), btn('Открыть', { icon: 'folder-open', cls: 'sm', onclick: () => api('app.openPath', info.root) }))),
       h('.card', h('h3', icon('info'), 'О лаунчере'),
         h('p', { style: { marginBottom: '8px' } }, h('b', 'Nebula Launcher ' + info.version), h('span.muted', ' · Electron ' + info.electron)),
+        h('.row.wrap', { style: { margin: '4px 0 12px' } },
+          (() => { const b = btn('Проверить обновления', { icon: 'refresh-cw', cls: 'primary sm' }); b.onclick = async () => { b.disabled = true; await checkForUpdates({ silent: false }); b.disabled = false; }; return b; })(),
+          btn('GitHub', { icon: 'github', cls: 'sm', onclick: () => api('app.openExternal', 'https://github.com/KotikVanil/nebula-launcher') })),
         h('p.muted', { style: { fontSize: '12.5px' } }, 'Моды и сборки — Modrinth. Java — официальные сборки Mojang. Оффлайн-скины — authlib-injector. Подключение ИИ — Model Context Protocol.'),
         h('p.dim', { style: { fontSize: '12px', marginTop: '10px' } }, 'Подсказка: попробуй ↑↑↓↓←→←→BA или 5 кликов по логотипу.'))));
   drawAccounts();

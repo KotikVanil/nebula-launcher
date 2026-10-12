@@ -7,6 +7,7 @@ import { initBackground } from './bg.js';
 import { openLogin } from './pages/account.js';
 import { openWizard } from './pages/wizard.js';
 import { showCrash } from './pages/crash.js';
+import { checkForUpdates } from './update.js';
 
 const PAGES = {
   home: () => import('./pages/home.js'),
@@ -46,6 +47,7 @@ function titlebar() {
   return h('#titlebar',
     h('.brand', h('b', 'NEBULA'), h('span', 'LAUNCHER')),
     h('.spacer'),
+    h('.tb-group#tb-update'),
     running,
     h('.tb-group', dl),
     h('.tb-group', { style: { marginLeft: '8px' } },
@@ -282,6 +284,7 @@ async function boot() {
   window.addEventListener('contextmenu', (e) => { if (!e.target.closest('input, textarea, .console, .md, .msg')) e.preventDefault(); });
 
   await navigate('home');
+  setTimeout(() => checkForUpdates({ silent: true }), 4000);
   if (!state.accounts.list.length) setTimeout(() => openLogin({ welcome: true }), 600);
 }
 

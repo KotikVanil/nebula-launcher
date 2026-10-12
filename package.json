@@ -1,7 +1,7 @@
 {
   "name": "nebula-launcher",
   "productName": "Nebula Launcher",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Minecraft launcher with instances, Modrinth, skins and an AI modpack workshop",
   "main": "src/main/main.js",
   "author": "IVAN",
@@ -36,15 +36,34 @@
   "build": {
     "appId": "com.nebula.launcher",
     "productName": "Nebula Launcher",
-    "directories": { "output": "dist" },
-    "files": ["src/**/*", "mcp/**/*", "cli/**/*", "docs/**/*", "assets/**/*", "package.json"],
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "mcp/**/*",
+      "cli/**/*",
+      "docs/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
     "asar": false,
-    "win": { "target": "nsis", "icon": "assets/icon.ico" },
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "shortcutName": "Nebula Launcher"
     }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/KotikVanil/nebula-launcher.git"
+  },
+  "nebula": {
+    "repo": "KotikVanil/nebula-launcher"
   }
 }
