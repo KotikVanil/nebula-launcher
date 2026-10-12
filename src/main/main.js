@@ -6,6 +6,7 @@ const { pathToFileURL } = require('url');
 const core = require('../core');
 const tasks = require('./tasks');
 const ai = require('./ai');
+const mctextures = require('../core/mctextures');
 
 const DEV = process.argv.includes('--dev');
 const SHOTS = process.argv.some((a) => a.startsWith('--shots'));
@@ -168,6 +169,26 @@ const api = {
     const out = await dialog.showSaveDialog(win, { defaultPath: s.name + '.png', filters: [{ name: 'PNG', extensions: ['png'] }] });
     if (!out.canceled) fs.copyFileSync(s.path, out.filePath);
     return !out.canceled;
+  },
+
+  // real Minecraft textures + default skins read from the local client jar
+  'textures.get': async () => {
+    const r = await mctextures.ensure();
+    if (!r) return null;
+    const durl = (p) => { try { return 'data:image/png;base64,' + fs.readFileSync(p).toString('base64'); } catch { return null; } };
+    return {
+      jar: r.jar,
+      blocks: Object.fromEntries(Object.entries(r.blocks).map(([k, p]) => [k, durl(p)])),
+      skins: r.skins.map((s) => ({ id: s.id, name: s.name, variant: s.variant, url: durl(s.path) })),
+    };
+  },
+  'skins.addDefault': (id) => {
+    const r = require('../core/mctextures');
+    return r.ensure().then((t) => {
+      const s = t.skins.find((x) => x.id === id);
+      if (!s) throw new Error('Скин не найден');
+      return core.skins.add(fs.readFileSync(s.path), { name: s.name, variant: s.variant, source: 'default' });
+    });
   },
 
   // modrinth

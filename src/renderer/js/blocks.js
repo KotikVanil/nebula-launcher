@@ -94,8 +94,81 @@ function defineTextures() {
   T.flower_red = makeTex(46, (x, y) => (x === 7 && y > 7 ? [60, 140, 40] : (Math.abs(x - 7) + Math.abs(y - 5) < 3 ? [230, 50, 50] : [0, 0, 0, 0])));
   T.flower_yellow = makeTex(47, (x, y) => (x === 7 && y > 8 ? [60, 140, 40] : (Math.abs(x - 7) + Math.abs(y - 6) < 3 ? [250, 220, 60] : [0, 0, 0, 0])));
   T.grass_plant = makeTex(48, (x, y, r) => ((x * 3 + 1) % 5 === 0 && y > 4 + (x % 4) * 2 ? shade(hexToRgb('#5ca83a'), 0.8 + r() * 0.4) : [0, 0, 0, 0]));
+  T.pumpkin_top = makeTex(49, (x, y, r) => (Math.abs(x - 7.5) < 1.5 && Math.abs(y - 7.5) < 1.5 ? [90, 70, 30] : shade(hexToRgb('#d9861c'), 0.8 + r() * 0.25)));
+  T.crafting_side2 = T.crafting_side;
+  T.diamond_block = makeTex(50, (x, y, r) => shade(hexToRgb('#62ede4'), (x === 0 || y === 0 ? 1.15 : x === 15 || y === 15 ? 0.7 : 0.9) + r() * 0.15));
+  T.gold_block = makeTex(51, (x, y, r) => shade(hexToRgb('#f6d03d'), (x === 0 || y === 0 ? 1.15 : x === 15 || y === 15 ? 0.7 : 0.9) + r() * 0.15));
+  T.emerald_block = makeTex(52, (x, y, r) => shade(hexToRgb('#41d36b'), (x === 0 || y === 0 ? 1.15 : x === 15 || y === 15 ? 0.7 : 0.9) + r() * 0.15));
+  T.netherite = makeTex(53, noisy('#433d40', 0.3));
+  T.hay_top = makeTex(54, (x, y, r) => shade(hexToRgb('#c4a32e'), (Math.abs(x - 7.5) + Math.abs(y - 7.5)) % 3 < 1 ? 0.7 : 0.95 + r() * 0.1));
+  T.hay_side = makeTex(55, (x, y, r) => (y === 3 || y === 12 ? [150, 30, 20] : shade(hexToRgb('#c4a32e'), (x % 3 === 0 ? 0.75 : 0.95) + r() * 0.1)));
+  T.melon_top = makeTex(56, noisy('#7c9b2a', 0.25));
+  T.melon_side = makeTex(57, (x, y, r) => shade(hexToRgb(x % 4 < 2 ? '#93b732' : '#5c7d1d'), 0.85 + r() * 0.2));
+  T.furnace_top = makeTex(58, noisy('#6e6e6e', 0.3));
+  T.furnace_side = makeTex(59, noisy('#7a7a7a', 0.3));
+  T.furnace_front = makeTex(60, (x, y, r) => (x > 3 && x < 12 && y > 8 && y < 14 ? [40, 30, 30] : shade(hexToRgb('#7a7a7a'), 0.8 + r() * 0.3)));
+  T.jukebox_top = makeTex(61, (x, y, r) => (Math.abs(x - 7.5) < 3 && Math.abs(y - 7.5) < 1 ? [20, 20, 20] : shade(hexToRgb('#7b5238'), 0.85 + r() * 0.2)));
+  T.jukebox_side = makeTex(62, (x, y, r) => shade(hexToRgb('#7b5238'), (y % 4 === 0 ? 0.7 : 0.9) + r() * 0.2));
+  T.cherry_log = makeTex(63, (x, y, r) => shade(hexToRgb('#3a2232'), (x % 4 === 0 ? 0.7 : 0.95) + r() * 0.25));
+  T.cherry_log_top = makeTex(64, (x, y, r) => shade(hexToRgb('#e2a0a8'), 0.85 + r() * 0.2));
+  T.beacon = makeTex(65, (x, y, r) => (x > 3 && x < 12 && y > 3 && y < 12 ? [180, 250, 245] : [...shade(hexToRgb('#9be8f0'), 0.8 + r() * 0.3), 200]));
+  T.sea_lantern = makeTex(66, (x, y, r) => shade(hexToRgb('#cfe8e0'), 0.85 + r() * 0.25));
+  T.prismarine = makeTex(67, (x, y, r) => shade(hexToRgb('#5fa898'), (y % 8 === 0 || (x + (y >> 3) * 4) % 8 === 0 ? 0.65 : 0.95) + r() * 0.1));
+  T.quartz = makeTex(68, noisy('#ece6df', 0.08));
+  T.bricks = makeTex(69, (x, y, r) => (y % 4 === 3 || (x + (y >> 2) % 2 * 4) % 8 === 0 ? [160, 155, 150] : shade(hexToRgb('#965a49'), 0.85 + r() * 0.2)));
   return T;
 }
+
+// ---------- real Minecraft textures (from the user's own client jar) ----------
+let realLoaded = false;
+const TINT = { grass_top: '#91bd59', leaves: '#8cc240', grass_plant: '#91bd59', water: '#3f76e4', grass_overlay: '#91bd59' };
+
+function imgFrom(url) {
+  return new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = url; });
+}
+
+function toTex(img, tint) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 16;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  const w = img.width;
+  ctx.drawImage(img, 0, 0, w, w, 0, 0, 16, 16); // animated strips: first frame
+  if (tint) {
+    const d = ctx.getImageData(0, 0, 16, 16);
+    const [R, G, B] = hexToRgb(tint);
+    for (let i = 0; i < d.data.length; i += 4) { d.data[i] = d.data[i] * R / 255; d.data[i + 1] = d.data[i + 1] * G / 255; d.data[i + 2] = d.data[i + 2] * B / 255; }
+    ctx.putImageData(d, 0, 0);
+  }
+  return c;
+}
+
+async function applyRealTextures(blocks) {
+  if (!blocks) return false;
+  defineTextures();
+  const loaded = {};
+  await Promise.all(Object.entries(blocks).map(async ([k, url]) => { if (url) { const i = await imgFrom(url); if (i) loaded[k] = i; } }));
+  for (const [k, img] of Object.entries(loaded)) {
+    if (k === 'grass_overlay') continue;
+    T[k] = toTex(img, TINT[k]);
+  }
+  // grass side = dirt-like base + biome-tinted overlay, as the game renders it
+  if (loaded.grass_side && loaded.grass_overlay) T.grass_side.getContext('2d').drawImage(toTex(loaded.grass_overlay, TINT.grass_overlay), 0, 0);
+  realLoaded = Object.keys(loaded).length > 10;
+  iconCache.clear();
+  return realLoaded;
+}
+function hasRealTextures() { return realLoaded; }
+
+// Mojang default skins (Steve, Alex, Ari…) from the same jar
+let defaultSkins = [];
+const defaultSkinImgs = new Map();
+async function setDefaultSkins(list) {
+  defaultSkins = list || [];
+  await Promise.all(defaultSkins.map(async (s) => { const i = await imgFrom(s.url); if (i) defaultSkinImgs.set(s.id, i); }));
+}
+function getDefaultSkins() { return defaultSkins; }
+function steveImage() { return defaultSkinImgs.get('steve-classic') || null; }
 
 // block id -> [top, left, right] texture keys
 const BLOCKS = {
@@ -108,10 +181,10 @@ const BLOCKS = {
   lapis: ['lapis', 'lapis', 'lapis'],
   copper: ['copper', 'copper', 'copper'],
   tnt: ['tnt_top', 'tnt_side', 'tnt_side'],
-  crafting: ['crafting_top', 'crafting_side', 'crafting_side'],
+  crafting: ['crafting_top', 'crafting_side', 'crafting_side2'],
   bookshelf: ['planks', 'bookshelf', 'bookshelf'],
   obsidian: ['obsidian', 'obsidian', 'obsidian'],
-  pumpkin: ['pumpkin', 'pumpkin_face', 'pumpkin'],
+  pumpkin: ['pumpkin_top', 'pumpkin_face', 'pumpkin'],
   ice: ['ice', 'ice', 'ice'],
   netherrack: ['netherrack', 'netherrack', 'netherrack'],
   endstone: ['endstone', 'endstone', 'endstone'],
@@ -125,6 +198,20 @@ const BLOCKS = {
   magma: ['magma', 'magma', 'magma'],
   planks: ['planks', 'planks', 'planks'],
   leaves: ['leaves', 'leaves', 'leaves'],
+  diamond_block: ['diamond_block', 'diamond_block', 'diamond_block'],
+  gold_block: ['gold_block', 'gold_block', 'gold_block'],
+  emerald_block: ['emerald_block', 'emerald_block', 'emerald_block'],
+  netherite: ['netherite', 'netherite', 'netherite'],
+  hay: ['hay_top', 'hay_side', 'hay_side'],
+  melon: ['melon_top', 'melon_side', 'melon_side'],
+  furnace: ['furnace_top', 'furnace_front', 'furnace_side'],
+  jukebox: ['jukebox_top', 'jukebox_side', 'jukebox_side'],
+  cherry_log: ['cherry_log_top', 'cherry_log', 'cherry_log'],
+  beacon: ['beacon', 'beacon', 'beacon'],
+  sea_lantern: ['sea_lantern', 'sea_lantern', 'sea_lantern'],
+  prismarine: ['prismarine', 'prismarine', 'prismarine'],
+  quartz: ['quartz', 'quartz', 'quartz'],
+  bricks: ['bricks', 'bricks', 'bricks'],
 };
 
 const iconCache = new Map();
@@ -157,11 +244,6 @@ function blockIcon(id, size = 96) {
   draw(faces[1], ux, uy, 0, 16 * s / 16 * 1.0 * 1.0, cx - w, top + hgt, 0.18);
   // right face
   draw(faces[2], ux, -uy, 0, 16 * s / 16, cx, top + 2 * hgt, 0.36);
-  // edge highlight
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.strokeStyle = 'rgba(255,255,255,.18)';
-  ctx.lineWidth = Math.max(1, size / 96);
-  ctx.beginPath(); ctx.moveTo(cx - w, top + hgt); ctx.lineTo(cx, top); ctx.lineTo(cx + w, top + hgt); ctx.stroke();
   iconCache.set(key, c);
   return c;
 }
@@ -247,7 +329,54 @@ function bodyCanvas(img, slim = false) {
 }
 
 // Procedural skin generator (64x64 layout). Used for the default "Nebula" skin and the dice button.
+// Random skin: a Mojang default skin with recoloured clothes and hair (keeps the real shading)
+function rgb2hsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+  if (mx === mn) return [0, 0, l];
+  const d = mx - mn, s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+  const h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h * 60, s, l];
+}
+function hsl2rgb(h, s, l) {
+  h = ((h % 360) + 360) % 360 / 360;
+  if (!s) return [l * 255, l * 255, l * 255];
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+  const f = (t) => { t = (t + 1) % 1; return t < 1 / 6 ? p + (q - p) * 6 * t : t < 1 / 2 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; };
+  return [f(h + 1 / 3) * 255, f(h) * 255, f(h - 1 / 3) * 255];
+}
 function generateSkin(seed = Date.now()) {
+  const bases = [...defaultSkinImgs.entries()];
+  if (!bases.length) return proceduralSkin(seed);
+  const r = rng(seed);
+  const [baseId, img] = bases[Math.floor(r() * bases.length)];
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(img, 0, 0, 64, 64);
+  const d = ctx.getImageData(0, 0, 64, 64);
+  const shirtHue = r() * 360, pantsHue = r() * 360, hairHue = [20, 30, 40, 0, 270, 200, 120][Math.floor(r() * 7)];
+  const hairLight = 0.6 + r() * 0.9, satK = 0.8 + r() * 0.5;
+  const isSkin = (h, s, l) => h >= 8 && h <= 42 && s > 0.15 && s < 0.75 && l > 0.32 && l < 0.85;
+  for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) {
+    const i = (y * 64 + x) * 4;
+    if (!d.data[i + 3]) continue;
+    const [h, s, l] = rgb2hsl(d.data[i], d.data[i + 1], d.data[i + 2]);
+    if (s < 0.12 || l > 0.9) continue; // whites, greys, eyes
+    if (isSkin(h, s, l) && !(y < 16 && l < 0.3)) continue;
+    let nh = h, ns = Math.min(1, s * satK), nl = l;
+    if (y < 16) { nh = hairHue + (h - 25); nl = Math.max(0.03, Math.min(0.85, l * hairLight)); ns = hairHue === 0 ? s * 0.4 : ns; }
+    else if ((y < 48 && x < 16) || (y >= 48 && x < 32)) nh = h + pantsHue;
+    else nh = h + shirtHue;
+    const [R, G, B] = hsl2rgb(nh, ns, nl);
+    d.data[i] = R; d.data[i + 1] = G; d.data[i + 2] = B;
+  }
+  ctx.putImageData(d, 0, 0);
+  c.dataset.variant = baseId.endsWith('slim') ? 'slim' : 'classic';
+  return c;
+}
+
+function proceduralSkin(seed = Date.now()) {
   const r = rng(seed);
   const pick = (a) => a[Math.floor(r() * a.length)];
   const skinTone = pick(['#f1c7a5', '#e0ac85', '#c68e64', '#8d5a3c', '#f5d6c0', '#6b4630']);
@@ -292,4 +421,4 @@ function generateSkin(seed = Date.now()) {
   return c;
 }
 
-export { defineTextures, blockIcon, iconCanvas, logoCanvas, loadImage, headCanvas, bodyCanvas, generateSkin, BLOCKS, T as TEXTURES };
+export { applyRealTextures, hasRealTextures, setDefaultSkins, getDefaultSkins, steveImage, defineTextures, blockIcon, iconCanvas, logoCanvas, loadImage, headCanvas, bodyCanvas, generateSkin, BLOCKS, T as TEXTURES };

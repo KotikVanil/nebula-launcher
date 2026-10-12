@@ -6,7 +6,8 @@ const P = require('./paths');
 const settings = require('./settings');
 const { readJSON, writeJSON, exists, slugify, copyDir, dirSize } = require('./util');
 
-const ICONS = ['grass', 'stone', 'diamond', 'emerald', 'gold', 'redstone', 'tnt', 'crafting', 'bookshelf', 'obsidian', 'pumpkin', 'ice', 'netherrack', 'endstone', 'sand', 'log', 'amethyst', 'copper', 'slime', 'glowstone', 'sculk', 'cherry', 'lapis', 'magma'];
+const ICONS = ['grass', 'stone', 'diamond', 'emerald', 'gold', 'redstone', 'tnt', 'crafting', 'bookshelf', 'obsidian', 'pumpkin', 'ice', 'netherrack', 'endstone', 'sand', 'log', 'amethyst', 'copper', 'slime', 'glowstone', 'sculk', 'cherry', 'lapis', 'magma',
+  'diamond_block', 'gold_block', 'emerald_block', 'netherite', 'hay', 'melon', 'furnace', 'jukebox', 'cherry_log', 'beacon', 'sea_lantern', 'prismarine', 'quartz', 'bricks', 'leaves', 'planks'];
 
 function file(id) { return path.join(P.instanceDir(id), 'instance.json'); }
 

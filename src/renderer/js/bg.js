@@ -148,7 +148,7 @@ function buildMesh({ v, plants }, atlas) {
     for (const d of DIRS) {
       const nb = v.get(x + d.n[0], y + d.n[1], z + d.n[2]);
       if (b === B.WATER) { if (nb) continue; }
-      else if (!SEE_THROUGH.has(nb) || (nb === b && b !== B.WATER)) continue;
+      else if (!SEE_THROUGH.has(nb) || (nb === b && b !== B.WATER && b !== B.LEAVES && b !== B.CHERRY)) continue;
       const tex = FACES[b][d.f];
       // cheap ambient occlusion: darker when a block sits above side faces
       let ao = 1;

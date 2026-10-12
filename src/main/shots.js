@@ -13,13 +13,13 @@ module.exports.run = (win) => {
   win.setPosition(20, 20);
   win.showInactive();
   win.webContents.once('did-finish-load', async () => {
-    await wait(3500);
+    await wait(9000);
     for (const p of pages) {
       try {
         await win.webContents.executeJavaScript(`window.__shot && window.__shot(${JSON.stringify(p)})`);
         await wait(2600);
         const img = await win.webContents.capturePage();
-        fs.writeFileSync(path.join(out, p + '.png'), img.toPNG());
+        fs.writeFileSync(path.join(out, p.replace(/[^a-z0-9_-]/gi, '_') + '.png'), img.toPNG());
       } catch (e) { console.error('shot', p, e.message); }
     }
     app.quit();

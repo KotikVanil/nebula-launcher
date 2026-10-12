@@ -1,20 +1,26 @@
 // Skins: 3D viewer, library, one-click apply (Mojang upload or offline), import by file / nickname / URL / generator, capes.
 import { api, state, listen, activeAccount, refreshAccounts, emit } from '../api.js';
 import { h, icon, btn, busy, toast, promptDialog, confirmDialog, tabs } from '../ui.js';
-import { loadImage, bodyCanvas, generateSkin } from '../blocks.js';
+import { loadImage, bodyCanvas, generateSkin, getDefaultSkins } from '../blocks.js';
+import { mcAnimation } from '../mcanim.js';
 import { sfx } from '../sound.js';
 
 let viewer = null;
 let ro = null;
 let offs = [];
 
+// Minecraft-accurate animations (HumanoidModel formulas) + a couple of skinview3d extras
+let lookTarget = { x: 0, y: 0 };
+const getLook = () => lookTarget;
 const ANIMS = [
-  ['idle', 'Стоять', 'person-standing', () => new skinview3d.IdleAnimation()],
-  ['walk', 'Идти', 'footprints', () => new skinview3d.WalkingAnimation()],
-  ['run', 'Бежать', 'zap', () => new skinview3d.RunningAnimation()],
-  ['fly', 'Лететь', 'plane', () => new skinview3d.FlyingAnimation()],
+  ['idle', 'Стоять', 'person-standing', () => mcAnimation('idle', getLook)],
+  ['walk', 'Идти', 'footprints', () => mcAnimation('walk', getLook)],
+  ['run', 'Бежать', 'zap', () => mcAnimation('run', getLook)],
+  ['crouch', 'Шифт', 'arrow-down', () => mcAnimation('crouch', getLook)],
+  ['attack', 'Удар', 'swords', () => mcAnimation('attack', getLook)],
+  ['sit', 'Сидеть', 'armchair', () => mcAnimation('sit', getLook)],
+  ['fly', 'Элитры', 'plane', () => new skinview3d.FlyingAnimation()],
   ['wave', 'Махать', 'hand', () => new skinview3d.WaveAnimation('right')],
-  ['crouch', 'Присесть', 'arrow-down', () => new skinview3d.CrouchAnimation()],
 ];
 
 async function skinSrc(acc) {
@@ -38,6 +44,7 @@ export async function render(root, params = {}) {
   stage.append(h('.stage-top', h('span.chip', icon('mouse-pointer-2'), 'Крути мышкой'), h('.grow'), h('span.chip#skin-acc-chip')), bottom);
 
   const lib = h('.skin-lib');
+  const defaultsBox = h('.skin-lib');
   const capesBox = h('div');
   const applyBtn = btn('Применить к аккаунту', { icon: 'wand-sparkles', cls: 'primary' });
   const right = h('.col', { style: { minHeight: 0, overflow: 'auto', gap: '14px' } },
@@ -49,6 +56,7 @@ export async function render(root, params = {}) {
         btn('По ссылке', { icon: 'link', onclick: fromUrl }),
         btn('Случайный', { icon: 'dices', onclick: randomSkin }))),
     h('.card', h('h3', icon('library'), 'Библиотека', h('span.grow'), applyBtn), lib),
+    h('.card', h('h3', icon('users'), 'Стандартные скины Minecraft'), h('p.muted', { style: { fontSize: '12.5px', marginBottom: '10px' } }, 'Взяты из файлов игры. Выбери и нажми «Применить к аккаунту».'), defaultsBox),
     capesBox);
 
   root.append(
@@ -61,10 +69,18 @@ export async function render(root, params = {}) {
   try { viewer.renderer.setClearColor(0x000000, 0); } catch {}
   viewer.autoRotate = false;
   viewer.controls.enableZoom = true;
-  viewer.globalLight.intensity = 2.2;
+  viewer.globalLight.intensity = 3.2;
+  try { viewer.playerWrapper.rotation.y = -0.42; } catch {}
   viewer.cameraLight.intensity = 1.0;
   const fit = () => { const r = stage.getBoundingClientRect(); viewer.width = Math.max(200, r.width); viewer.height = Math.max(200, r.height - bottom.offsetHeight); };
   ro = new ResizeObserver(fit); ro.observe(stage); fit();
+  // inventory-style: the player looks at the mouse cursor
+  const onMove = (e) => {
+    const r = canvas.getBoundingClientRect();
+    lookTarget = { x: (e.clientX - (r.left + r.width / 2)) / (r.width / 2), y: (e.clientY - (r.top + r.height * 0.3)) / (r.height / 2) };
+  };
+  window.addEventListener('mousemove', onMove);
+  offs.push(() => window.removeEventListener('mousemove', onMove));
   const setAnim = (id) => {
     anim = id;
     viewer.animation = ANIMS.find((a) => a[0] === id)[3]();
@@ -85,8 +101,9 @@ export async function render(root, params = {}) {
     modelBar.replaceChildren(tabs([{ id: 'classic', label: 'Steve (4px)' }, { id: 'slim', label: 'Alex (3px)' }], v, async (nv) => {
       if (!selected) return;
       selected.variant = nv;
-      await api('skins.update', selected.id, { variant: nv });
       show(selected.url, nv);
+      if (selected.isDefault) return;
+      await api('skins.update', selected.id, { variant: nv });
       drawLib();
     }));
   };
@@ -94,7 +111,7 @@ export async function render(root, params = {}) {
   // account chip + nametag
   const accChip = stage.querySelector('#skin-acc-chip');
   accChip.replaceChildren(icon(acc && acc.type === 'msa' ? 'shield-check' : 'user'), acc ? `${acc.name} · ${acc.type === 'msa' ? 'лицензия' : 'оффлайн'}` : 'нет аккаунта');
-  if (acc) viewer.nameTag = acc.name;
+
 
   // ---------- library ----------
   let skins = [];
@@ -113,9 +130,20 @@ export async function render(root, params = {}) {
       return c;
     }));
   }
+  function drawDefaults() {
+    const list = getDefaultSkins();
+    if (!list.length) { defaultsBox.replaceChildren(h('.muted', { style: { gridColumn: '1/-1', fontSize: '12.5px' } }, 'Появятся после первой загрузки игры (лаунчер возьмёт их из файлов Minecraft).')); return; }
+    defaultsBox.replaceChildren(...list.map((d) => {
+      const c = h('.skin-card', { onclick: () => select({ ...d, isDefault: true }) }, h('canvas', { width: 16, height: 32 }), h('.n', d.name), h('.v', d.variant === 'slim' ? 'Alex' : 'Steve'));
+      c.dataset.sid = d.id;
+      loadImage(d.url).then((img) => c.querySelector('canvas').getContext('2d').drawImage(bodyCanvas(img, d.variant === 'slim'), 0, 0));
+      return c;
+    }));
+  }
   function select(s) {
     selected = s; sfx('tick');
-    lib.querySelectorAll('.skin-card').forEach((c, i) => c.classList.toggle('sel', skins[i] && skins[i].id === s.id));
+    lib.querySelectorAll('.skin-card').forEach((c, i) => c.classList.toggle('sel', !s.isDefault && skins[i] && skins[i].id === s.id));
+    defaultsBox.querySelectorAll('.skin-card').forEach((c) => c.classList.toggle('sel', !!s.isDefault && c.dataset.sid === s.id));
     show(s.url, s.variant);
     drawModel();
   }
@@ -131,6 +159,7 @@ export async function render(root, params = {}) {
     const a = activeAccount();
     if (!a) return toast('Сначала добавь аккаунт', 'error');
     if (!selected) return toast('Выбери скин в библиотеке', 'error');
+    if (selected.isDefault) { const lib2 = await api('skins.addDefault', selected.id); selected = { ...lib2, url: selected.url }; }
     await api('skins.apply', a.id, selected.id, selected.variant);
     await refreshAccounts();
     sfx('levelup');
@@ -157,7 +186,7 @@ export async function render(root, params = {}) {
   async function randomSkin() {
     const c = generateSkin(Math.floor(Math.random() * 1e9));
     sfx('pop');
-    try { added(await api('skins.addBase64', c.toDataURL('image/png').split(',')[1], { name: 'Случайный #' + Math.floor(Math.random() * 999), source: 'gen' })); } catch (e) { toast(e.message, 'error'); }
+    try { added(await api('skins.addBase64', c.toDataURL('image/png').split(',')[1], { name: 'Случайный #' + Math.floor(Math.random() * 999), source: 'gen', variant: c.dataset.variant || 'classic' })); } catch (e) { toast(e.message, 'error'); }
   }
 
   // ---------- capes (Microsoft) ----------
@@ -186,14 +215,15 @@ export async function render(root, params = {}) {
   }
 
   await drawLib();
+  drawDefaults();
   drawModel();
   const cur = await skinSrc(acc);
   if (params.select) { const s = skins.find((x) => x.id === params.select); if (s) select(s); }
   else if (cur && cur.id) { const s = skins.find((x) => x.id === cur.id); if (s) select(s); else show(cur.url, cur.variant); }
   else if (cur) show(cur.url, cur.variant);
-  else show(generateSkin(2026).toDataURL(), 'classic');
+  else { const st = getDefaultSkins().find((d) => d.id === 'steve-classic'); show(st ? st.url : generateSkin(2026).toDataURL(), 'classic'); }
   drawCapes();
-  offs.push(listen('skins', drawLib), listen('accounts', () => { drawCapes(); const a = activeAccount(); if (a) viewer.nameTag = a.name; }));
+  offs.push(listen('skins', drawLib), listen('accounts', () => { drawCapes();  }));
 }
 
 export function destroy() {

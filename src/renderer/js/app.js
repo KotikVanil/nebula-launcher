@@ -1,7 +1,7 @@
 // App shell: titlebar, sidebar, router, background, global events.
 import { api, on, state, emit, listen, refreshInstances, refreshAccounts, activeAccount, isRunning, selectInstance } from './api.js';
 import { h, $, icon, toast, popover, closePopover, modal, btn, plural } from './ui.js';
-import { logoCanvas, headCanvas, loadImage, iconCanvas, generateSkin } from './blocks.js';
+import { logoCanvas, headCanvas, loadImage, iconCanvas, generateSkin, applyRealTextures, setDefaultSkins, steveImage } from './blocks.js';
 import { sfx, setSoundEnabled } from './sound.js';
 import { initBackground } from './bg.js';
 import { openLogin } from './pages/account.js';
@@ -121,7 +121,7 @@ function sidebar() {
       h('button.account-btn#acc-btn', { onclick: (e) => openAccounts(e.currentTarget) })));
 }
 
-const DEFAULT_SKIN = (() => { let c = null; return () => (c = c || generateSkin(2026)); })();
+const DEFAULT_SKIN = (() => { let c = null; return () => steveImage() || (c = c || generateSkin(2026)); })();
 async function headFor(acc, size = 64) {
   if (!acc) return headCanvas(null, size);
   try {
@@ -242,6 +242,10 @@ async function boot() {
 
   state.info = await api('app.info');
   state.settings = await api('settings.get');
+  // real Minecraft textures from the local client jar (downloaded once if no version is installed yet)
+  const texP = api('textures.get').then(async (t) => { if (t) { await applyRealTextures(t.blocks); await setDefaultSkins(t.skins); } return !!t; }).catch(() => false);
+  const quick = await Promise.race([texP, new Promise((r) => setTimeout(() => r('slow'), 2500))]);
+  if (quick === 'slow') texP.then((ok) => { if (!ok) return; if (bg) { bg.destroy(); bg = null; applyVisualSettings(state.settings); } renderAccountBtn(); if (current.name) navigate(current.name, current.params); });
   applyVisualSettings(state.settings);
   listen('settings', applyVisualSettings);
 
@@ -286,6 +290,14 @@ window.__shot = async (p) => {
   document.querySelectorAll('.modal-back, .popover').forEach((m) => m.remove());
   if (p === 'wizard') return openWizard();
   if (p === 'account') return openLogin({ welcome: true });
+  if (p.startsWith('skins:')) {
+    await navigate('skins');
+    setTimeout(() => {
+      document.querySelector('.skin-lib .skin-card[data-sid="steve-classic"]')?.click();
+      document.querySelector(`.chip[data-id="${p.split(':')[1]}"]`)?.click();
+    }, 600);
+    return;
+  }
   if (p === 'instance') return navigate('instance', { id: state.instances[0] && state.instances[0].id });
   return navigate(p);
 };
