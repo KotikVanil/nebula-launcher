@@ -36,6 +36,7 @@ export async function render(root) {
   clockT = setInterval(tick, 10000);
 
   const play = playButton(sel);
+  let modsChip = null, newsList = null;
 
   const drawHero = () => {
     const inst = sel();
@@ -50,14 +51,14 @@ export async function render(root) {
         loaderBadge(inst.loader, inst.loaderVersion),
         h('span.chip', icon('clock'), fmtDuration(inst.playtime)),
         h('span.chip', icon('history'), timeAgo(inst.lastPlayed)),
-        h('span.chip#home-mods', icon('puzzle'), '…'))
+        (modsChip = h('span.chip', icon('puzzle'), '…')))
         : h('.meta', h('span.chip', icon('sparkles'), 'Создай сборку за 10 секунд или попроси ИИ')),
       h('.hero-actions', play,
         inst ? btn('', { icon: 'folder-open', cls: 'icon lg', title: 'Папка игры', onclick: () => api('instances.openDir', inst.id) }) : null,
         inst ? btn('', { icon: 'sliders-horizontal', cls: 'icon lg', title: 'Настроить сборку', onclick: () => window.__nav.navigate('instance', { id: inst.id }) }) : null,
         inst ? btn('', { icon: 'ellipsis', cls: 'icon lg', onclick: (e) => instanceMenu(e, inst) }) : btn('Спросить ИИ', { icon: 'sparkles', cls: 'lg', onclick: () => window.__nav.navigate('ai') })),
       recentStrip());
-    if (inst) api('instances.stats', inst.id).then((s) => { const c = document.getElementById('home-mods'); if (c) c.replaceChildren(icon('puzzle'), `${s.mods} модов`); }).catch(() => {});
+    if (inst) api('instances.stats', inst.id).then((s) => { const c = modsChip; if (c) c.replaceChildren(icon('puzzle'), `${s.mods} модов`); }).catch(() => {});
   };
 
   const recentStrip = () => {
@@ -77,14 +78,14 @@ export async function render(root) {
   // side: AI promo + news
   side.append(
     h('.card.ai-promo', { onclick: () => window.__nav.navigate('ai') }, h('.orb-sm'), h('h4', '✦ ИИ-мастерская'), h('p', 'Опиши сборку словами — Claude найдёт моды, проверит совместимость и всё установит.')),
-    h('.card.news', h('h3', icon('newspaper'), 'Новости Minecraft'), h('.news-list#news-list', [1, 2, 3, 4].map(() => h('.skeleton', { style: { height: '72px' } })))));
+    h('.card.news', h('h3', icon('newspaper'), 'Новости Minecraft'), (newsList = h('.news-list', [1, 2, 3, 4].map(() => h('.skeleton', { style: { height: '72px' } }))))));
   api('news.get').then((items) => {
-    const list = document.getElementById('news-list');
+    const list = newsList;
     if (!list) return;
     list.replaceChildren(...items.map((n) => h('.news-item', { onclick: () => openNews(n) },
       n.image ? h('img', { src: n.image, loading: 'lazy' }) : null,
       h('div', h('.tag', n.type === 'release' ? 'Релиз' : 'Снапшот'), h('.t', n.title), h('.d', n.short ? n.short.slice(0, 80) + '…' : n.version)))));
-  }).catch(() => { const l = document.getElementById('news-list'); if (l) l.replaceChildren(h('.muted', 'Новости недоступны (нет сети?)')); });
+  }).catch(() => { const l = newsList; if (l) l.replaceChildren(h('.muted', 'Новости недоступны (нет сети?)')); });
 }
 
 // Patch notes right inside the launcher (official launcher content)
