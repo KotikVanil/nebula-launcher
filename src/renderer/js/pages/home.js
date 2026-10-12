@@ -1,5 +1,5 @@
 import { api, state, listen, activeAccount, selectInstance } from '../api.js';
-import { h, icon, btn, loaderBadge, fmtDuration, timeAgo } from '../ui.js';
+import { h, icon, btn, loaderBadge, fmtDuration, timeAgo, modal, md } from '../ui.js';
 import { playButton, instIcon, instanceMenu } from '../components.js';
 import { openWizard } from './wizard.js';
 import { sfx } from '../sound.js';
@@ -81,10 +81,23 @@ export async function render(root) {
   api('news.get').then((items) => {
     const list = document.getElementById('news-list');
     if (!list) return;
-    list.replaceChildren(...items.map((n) => h('.news-item', { onclick: () => api('app.openExternal', `https://www.minecraft.net/en-us/article/minecraft-${n.version.replace(/\./g, '-')}`) },
+    list.replaceChildren(...items.map((n) => h('.news-item', { onclick: () => openNews(n) },
       n.image ? h('img', { src: n.image, loading: 'lazy' }) : null,
       h('div', h('.tag', n.type === 'release' ? 'Релиз' : 'Снапшот'), h('.t', n.title), h('.d', n.short ? n.short.slice(0, 80) + '…' : n.version)))));
   }).catch(() => { const l = document.getElementById('news-list'); if (l) l.replaceChildren(h('.muted', 'Новости недоступны (нет сети?)')); });
+}
+
+// Patch notes right inside the launcher (official launcher content)
+async function openNews(n) {
+  const body = h('.md.news-body', h('.skeleton', { style: { height: '220px' } }));
+  modal({ title: n.title, wide: true, body: h('div', n.image ? h('img.news-hero', { src: n.image }) : null,
+    h('.row', { style: { margin: '10px 0 4px', gap: '8px' } }, h('span.chip', n.type === 'release' ? 'Релиз' : 'Снапшот'), h('span.chip', n.version), n.date ? h('span.chip', new Date(n.date).toLocaleDateString('ru-RU')) : null), body) });
+  try {
+    const d = await api('news.body', n.content);
+    body.innerHTML = md(d.body || '');
+    body.querySelectorAll('a').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); api('app.openExternal', a.href); }));
+    body.querySelectorAll('img').forEach((img) => { const s = img.getAttribute('src') || ''; if (s.startsWith('/')) img.src = 'https://launchercontent.mojang.com' + s; });
+  } catch (e) { body.replaceChildren(h('p.muted', 'Не удалось загрузить: ' + e.message)); }
 }
 
 export function destroy() { offs.forEach((f) => f()); offs = []; clearInterval(clockT); }

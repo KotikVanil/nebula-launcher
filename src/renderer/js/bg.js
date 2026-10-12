@@ -23,22 +23,57 @@ function makeNoise(seed) {
 }
 
 // ---------- atlas ----------
-const ATLAS_KEYS = ['grass_top', 'grass_side', 'dirt', 'stone', 'diamond', 'gold', 'emerald', 'redstone', 'lapis', 'copper', 'log', 'log_top', 'leaves', 'cherry', 'sand', 'water', 'amethyst', 'flower_red', 'flower_yellow', 'grass_plant', 'snow', 'obsidian', 'glowstone', 'planks'];
-function buildAtlas() {
+// One texture per block face (no atlas: no bleeding at distance). 16px art is upscaled x8 with
+// nearest filtering so mipmaps + anisotropic filtering keep it crisp up close and calm far away.
+function buildTextures(renderer) {
   defineTextures();
-  const N = 8, c = document.createElement('canvas');
-  c.width = c.height = N * 16;
-  const ctx = c.getContext('2d');
-  const uv = {};
-  ATLAS_KEYS.forEach((k, i) => {
-    const x = (i % N) * 16, y = Math.floor(i / N) * 16;
-    ctx.drawImage(TEXTURES[k], x, y);
-    const e = 0.02 / (N * 16);
-    uv[k] = [x / (N * 16) + e, 1 - (y + 16) / (N * 16) + e, (x + 16) / (N * 16) - e, 1 - y / (N * 16) - e];
-  });
-  const tex = new THREE.CanvasTexture(c);
-  tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter; tex.colorSpace = THREE.SRGBColorSpace; tex.generateMipmaps = false;
-  return { tex, uv };
+  const cache = new Map();
+  const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  const S = 16, K = 8, N = S * K;
+  return (key) => {
+    if (cache.has(key)) return cache.get(key);
+    const ctx = TEXTURES[key].getContext('2d', { willReadFrequently: true });
+    const src = ctx.getImageData(0, 0, S, S).data;
+    // colour bleeding: transparent pixels take the colour of opaque neighbours, so mipmaps
+    // and filtering never pull black into leaf / grass edges (alpha stays 0)
+    const px = new Uint8ClampedArray(src);
+    for (let pass = 0; pass < 4; pass++) {
+      const prev = new Uint8ClampedArray(px);
+      for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+        const i = (y * S + x) * 4;
+        if (src[i + 3] > 0 || prev[i] + prev[i + 1] + prev[i + 2] > 0) continue;
+        let r = 0, g = 0, bl = 0, n = 0;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const xx = x + dx, yy = y + dy;
+          if (xx < 0 || yy < 0 || xx >= S || yy >= S) continue;
+          const j = (yy * S + xx) * 4;
+          if (prev[j] + prev[j + 1] + prev[j + 2] === 0) continue;
+          r += prev[j]; g += prev[j + 1]; bl += prev[j + 2]; n++;
+        }
+        if (n) { px[i] = r / n; px[i + 1] = g / n; px[i + 2] = bl / n; }
+      }
+    }
+    // leaves: "fast graphics" style — holes filled with a darker leaf colour (no see-through speckle)
+    if (key === 'leaves' || key === 'cherry') {
+      for (let i = 0; i < px.length; i += 4) if (src[i + 3] < 128) { px[i] *= 0.72; px[i + 1] *= 0.72; px[i + 2] *= 0.72; px[i + 3] = 255; }
+    }
+    // nearest upscale x8 into raw data (DataTexture keeps RGB of transparent pixels; canvas would not)
+    const data = new Uint8Array(N * N * 4);
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const si = (((S - 1 - Math.floor(y / K)) * S) + Math.floor(x / K)) * 4; // flip Y for GL
+      const di = (y * N + x) * 4;
+      data[di] = px[si]; data[di + 1] = px[si + 1]; data[di + 2] = px[si + 2]; data[di + 3] = px[si + 3];
+    }
+    const t = new THREE.DataTexture(data, N, N, THREE.RGBAFormat);
+    t.magFilter = THREE.NearestFilter;
+    t.minFilter = THREE.LinearMipmapLinearFilter;
+    t.generateMipmaps = true;
+    t.anisotropy = aniso;
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.needsUpdate = true;
+    cache.set(key, t);
+    return t;
+  };
 }
 
 // block types
@@ -124,60 +159,91 @@ function generateIsland(seed, R, opts = {}) {
   return { v, plants };
 }
 
+// face definitions: normal, corners (CCW), texture slot (0 top, 1 side, 2 bottom), base shade like MC (top 1, sides .8/.6, bottom .5)
 const DIRS = [
   { n: [0, 1, 0], c: [[0, 1, 1], [1, 1, 1], [1, 1, 0], [0, 1, 0]], f: 0, s: 1.0 },
   { n: [0, -1, 0], c: [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]], f: 2, s: 0.5 },
-  { n: [1, 0, 0], c: [[1, 0, 1], [1, 0, 0], [1, 1, 0], [1, 1, 1]], f: 1, s: 0.78 },
-  { n: [-1, 0, 0], c: [[0, 0, 0], [0, 0, 1], [0, 1, 1], [0, 1, 0]], f: 1, s: 0.78 },
-  { n: [0, 0, 1], c: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]], f: 1, s: 0.66 },
-  { n: [0, 0, -1], c: [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]], f: 1, s: 0.66 },
+  { n: [1, 0, 0], c: [[1, 0, 1], [1, 0, 0], [1, 1, 0], [1, 1, 1]], f: 1, s: 0.6 },
+  { n: [-1, 0, 0], c: [[0, 0, 0], [0, 0, 1], [0, 1, 1], [0, 1, 0]], f: 1, s: 0.6 },
+  { n: [0, 0, 1], c: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]], f: 1, s: 0.8 },
+  { n: [0, 0, -1], c: [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]], f: 1, s: 0.8 },
 ];
+const AO_CURVE = [1, 0.8, 0.65, 0.5];
 
-function buildMesh({ v, plants }, atlas) {
-  const groups = { solid: { p: [], n: [], u: [], c: [], i: [] }, leaves: { p: [], n: [], u: [], c: [], i: [] }, water: { p: [], n: [], u: [], c: [], i: [] } };
-  const quad = (g, corners, n, uvr, shade) => {
+function buildMesh({ v, plants }, getTex) {
+  const groups = new Map(); // texture key + kind -> buffers
+  const grp = (tex, kind) => {
+    const k = tex + '|' + kind;
+    if (!groups.has(k)) groups.set(k, { tex, kind, p: [], n: [], u: [], c: [], i: [] });
+    return groups.get(k);
+  };
+  const opaque = (x, y, z) => { const b = v.get(x, y, z); return b && !SEE_THROUGH.has(b) ? 1 : 0; };
+  const quad = (g, corners, n, shades) => {
     const base = g.p.length / 3;
-    for (const c of corners) { g.p.push(...c); g.n.push(...n); g.c.push(shade, shade, shade); }
-    g.u.push(uvr[0], uvr[1], uvr[2], uvr[1], uvr[2], uvr[3], uvr[0], uvr[3]);
-    g.i.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    corners.forEach((c, i) => { g.p.push(...c); g.n.push(...n); g.c.push(shades[i], shades[i], shades[i]); });
+    g.u.push(0, 0, 1, 0, 1, 1, 0, 1);
+    // flip the diagonal when AO is anisotropic (avoids the classic voxel AO artefact)
+    if (shades[0] + shades[2] < shades[1] + shades[3]) g.i.push(base + 1, base + 2, base + 3, base + 1, base + 3, base);
+    else g.i.push(base, base + 1, base + 2, base, base + 2, base + 3);
   };
   for (const [key, b] of v.map) {
     if (!b) continue;
     const [x, y, z] = key.split(',').map(Number);
-    const g = b === B.WATER ? groups.water : (b === B.LEAVES || b === B.CHERRY) ? groups.leaves : groups.solid;
+    const kind = b === B.WATER ? 'water' : (b === B.LEAVES || b === B.CHERRY) ? 'leaves' : 'solid';
     for (const d of DIRS) {
       const nb = v.get(x + d.n[0], y + d.n[1], z + d.n[2]);
       if (b === B.WATER) { if (nb) continue; }
-      else if (!SEE_THROUGH.has(nb) || (nb === b && b !== B.WATER && b !== B.LEAVES && b !== B.CHERRY)) continue;
+      else if (!SEE_THROUGH.has(nb) || nb === b) continue;
       const tex = FACES[b][d.f];
-      // cheap ambient occlusion: darker when a block sits above side faces
-      let ao = 1;
-      if (d.n[1] === 0 && v.get(x + d.n[0], y + 1, z + d.n[2]) && !SEE_THROUGH.has(v.get(x + d.n[0], y + 1, z + d.n[2]))) ao = 0.8;
       const yTop = b === B.WATER && d.n[1] === 1 ? 0.85 : 1;
+      const axis = d.n[0] ? 0 : d.n[1] ? 1 : 2;
+      const shades = d.c.map((c) => {
+        if (kind !== 'solid') return d.s;
+        // smooth-lighting style vertex AO: two side neighbours + corner in front of the face
+        const o = [x + d.n[0], y + d.n[1], z + d.n[2]];
+        const off = [0, 1, 2].filter((a) => a !== axis).map((a) => { const s2 = [0, 0, 0]; s2[a] = c[a] ? 1 : -1; return s2; });
+        const s1 = opaque(o[0] + off[0][0], o[1] + off[0][1], o[2] + off[0][2]);
+        const s2 = opaque(o[0] + off[1][0], o[1] + off[1][1], o[2] + off[1][2]);
+        const cr = opaque(o[0] + off[0][0] + off[1][0], o[1] + off[0][1] + off[1][1], o[2] + off[0][2] + off[1][2]);
+        const level = s1 && s2 ? 3 : s1 + s2 + cr;
+        return d.s * AO_CURVE[level];
+      });
       const corners = d.c.map(([cx, cy, cz]) => [x + cx, y + (cy ? yTop : 0), z + cz]);
-      quad(g, corners, d.n, atlas.uv[tex], d.s * ao);
+      quad(grp(tex, kind), corners, d.n, shades);
     }
   }
   for (const [x, y, z, tex] of plants) {
-    const uvr = atlas.uv[tex];
-    quad(groups.leaves, [[x + 0.1, y, z + 0.1], [x + 0.9, y, z + 0.9], [x + 0.9, y + 0.9, z + 0.9], [x + 0.1, y + 0.9, z + 0.1]], [0, 1, 0], uvr, 0.95);
-    quad(groups.leaves, [[x + 0.9, y, z + 0.1], [x + 0.1, y, z + 0.9], [x + 0.1, y + 0.9, z + 0.9], [x + 0.9, y + 0.9, z + 0.1]], [0, 1, 0], uvr, 0.95);
+    // crossed planes; both windings as separate front faces with an upward normal, so the
+    // back side is lit like the front (DoubleSide would flip the normal and turn grass black)
+    const g = grp(tex, 'plant');
+    const planes = [
+      [[x + 0.15, y, z + 0.15], [x + 0.85, y, z + 0.85], [x + 0.85, y + 0.85, z + 0.85], [x + 0.15, y + 0.85, z + 0.15]],
+      [[x + 0.85, y, z + 0.15], [x + 0.15, y, z + 0.85], [x + 0.15, y + 0.85, z + 0.85], [x + 0.85, y + 0.85, z + 0.15]],
+    ];
+    for (const c of planes) {
+      quad(g, c, [0, 1, 0], [0.92, 0.92, 1, 1]);
+      const base = g.p.length / 3;
+      quad(g, c, [0, 1, 0], [0.92, 0.92, 1, 1]);
+      g.i.splice(g.i.length - 6, 6, base, base + 2, base + 1, base, base + 3, base + 2);
+    }
   }
-  const make = (g) => {
+  const out = new THREE.Group();
+  for (const g of groups.values()) {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(g.p, 3));
     geo.setAttribute('normal', new THREE.Float32BufferAttribute(g.n, 3));
     geo.setAttribute('uv', new THREE.Float32BufferAttribute(g.u, 2));
     geo.setAttribute('color', new THREE.Float32BufferAttribute(g.c, 3));
     geo.setIndex(g.i);
-    return geo;
-  };
-  const grp = new THREE.Group();
-  grp.add(new THREE.Mesh(make(groups.solid), new THREE.MeshLambertMaterial({ map: atlas.tex, vertexColors: true })));
-  grp.add(new THREE.Mesh(make(groups.leaves), new THREE.MeshLambertMaterial({ map: atlas.tex, vertexColors: true, alphaTest: 0.5, side: THREE.DoubleSide })));
-  const water = new THREE.Mesh(make(groups.water), new THREE.MeshLambertMaterial({ map: atlas.tex, vertexColors: true, transparent: true, opacity: 0.78, depthWrite: false }));
-  grp.add(water);
-  return grp;
+    const map = getTex(g.tex);
+    const mat = g.kind === 'water'
+      ? new THREE.MeshLambertMaterial({ map, vertexColors: true, transparent: true, opacity: 0.8, depthWrite: false })
+      : g.kind === 'solid'
+        ? new THREE.MeshLambertMaterial({ map, vertexColors: true })
+        : new THREE.MeshLambertMaterial({ map, vertexColors: true, alphaTest: 0.5 });
+    out.add(new THREE.Mesh(geo, mat));
+  }
+  return out;
 }
 
 // ---------- sky palette ----------
@@ -218,10 +284,9 @@ function cssColor(name, fb) { return (getComputedStyle(document.documentElement)
 export function initBackground(canvas, opts = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  renderer.toneMapping = THREE.NoToneMapping; // keep Minecraft colours as they are
   let quality = opts.quality || 'high';
-  const setPR = () => renderer.setPixelRatio(quality === 'low' ? 0.7 : Math.min(window.devicePixelRatio, 1.5));
+  const setPR = () => renderer.setPixelRatio(quality === 'low' ? 0.75 : Math.min(window.devicePixelRatio, 2));
   setPR();
 
   const scene = new THREE.Scene();
@@ -273,16 +338,19 @@ export function initBackground(canvas, opts = {}) {
   scene.add(hemi, dir);
 
   // world
-  const atlas = buildAtlas();
+  const atlas = buildTextures(renderer);
   const world = new THREE.Group();
   const main = buildMesh(generateIsland(opts.seed || 4242, 14, { trees: 6, pond: true, cherry: true, depth: 15, glow: true }), atlas);
   world.add(main);
   const islets = [];
-  [[-34, 9, -22, 4, 31], [30, 14, -30, 3, 77], [-22, -10, 26, 3, 123], [38, -4, 18, 3, 999]].forEach(([x, y, z, r, s], i) => {
+  const isletRing = new THREE.Group();
+  world.add(isletRing);
+  // [angle from the camera side (PI = behind the big island), distance, height, radius, seed]
+  [[Math.PI - 0.75, 40, 10, 4, 31], [Math.PI + 0.7, 44, 15, 3, 77], [Math.PI + 1.25, 36, -6, 3, 123], [Math.PI - 1.3, 38, -2, 3, 999]].forEach(([ang, dist, y, r, s], i) => {
     const m = buildMesh(generateIsland(s, r, { trees: r > 3 ? 1 : 0, depth: 6, hilly: 0.5 }), atlas);
-    m.position.set(x, y, z);
+    m.position.set(Math.cos(ang) * dist, y, Math.sin(ang) * dist);
     m.userData = { baseY: y, ph: i * 1.7 };
-    world.add(m);
+    isletRing.add(m);
     islets.push(m);
   });
   scene.add(world);
@@ -371,8 +439,8 @@ export function initBackground(canvas, opts = {}) {
     sun.material.opacity = Math.max(0, Math.min(1, sd.y * 4 + 0.3)); moon.material.opacity = Math.max(0, Math.min(1, -sd.y * 4 + 0.3));
     dir.position.copy(sd.y > -0.05 ? sd : sd.clone().negate()).multiplyScalar(50);
     dir.color.copy(sd.y > -0.05 ? p.sun : new THREE.Color('#8fa0ff'));
-    dir.intensity = sd.y > -0.05 ? p.sunI * 1.6 : 0.75;
-    hemi.intensity = p.amb * 1.4 + p.night * 0.5;
+    dir.intensity = sd.y > -0.05 ? p.sunI * 0.85 : 0.35;
+    hemi.intensity = p.amb * 0.95 + p.night * 0.2;
     hemi.color.copy(p.top).lerp(new THREE.Color('#ffffff'), 0.5);
     starMat.opacity = p.night * 0.95 * (0.85 + Math.sin(time * 1.3) * 0.05);
     stars.rotation.y = time * 0.004;
@@ -386,11 +454,12 @@ export function initBackground(canvas, opts = {}) {
     // camera orbit + parallax
     mouseX += (tmx - mouseX) * 0.04; mouseY += (tmy - mouseY) * 0.04;
     const orbit = time * 0.035 + mouseX * 0.5;
-    const r = 60;
+    const r = 74;
     camera.position.set(Math.cos(orbit) * r, 13 + mouseY * -6 + Math.sin(time * 0.2) * 0.6, Math.sin(orbit) * r);
     camera.lookAt(0, -1 + mouseY * 2, 0);
 
     world.position.y = Math.sin(time * 0.5) * 0.35;
+    isletRing.rotation.y = -orbit;
     for (const m of islets) m.position.y = m.userData.baseY + Math.sin(time * 0.6 + m.userData.ph) * 0.8;
     for (const c of clouds.children) { c.position.x += c.userData.speed * dt * 2; if (c.position.x > 120) c.position.x = -120; }
     const pa = ffGeo.attributes.position;

@@ -101,6 +101,8 @@ const api = {
   },
   'app.readFileBase64': (p) => fs.readFileSync(p).toString('base64'),
   'app.fetchDataUrl': async (url) => {
+    // Mojang returns skin/cape URLs as http:// — upgrade them to https
+    url = String(url).replace(/^http:\/\//, 'https://');
     if (!/^https:\/\/(textures\.minecraft\.net|[\w.-]*mojang\.com|[\w.-]*minecraft\.net)\//.test(url)) throw new Error('URL не разрешён');
     const res = await core.net.request(url);
     const buf = Buffer.from(await res.arrayBuffer());
@@ -124,11 +126,18 @@ const api = {
   'instances.get': (id) => core.instances.get(id),
   'instances.create': (o) => { const i = core.instances.create(o); core.activity('launcher', 'create', { instanceId: i.id, name: i.name }); return i; },
   'instances.update': (id, p) => core.instances.update(id, p),
-  'instances.remove': (id) => core.instances.remove(id),
+  'instances.remove': (id) => {
+    if (core.launch.runningList().some((r) => r.instanceId === core.instances.get(id).id)) throw new Error('Сначала закройте игру этой сборки');
+    return core.instances.remove(id);
+  },
   'instances.duplicate': (id, n) => core.instances.duplicate(id, n),
   'instances.stats': (id) => core.instances.stats(id),
   'instances.dir': (id) => core.paths.gameDir(core.instances.get(id).id),
-  'instances.openDir': (id, sub) => shell.openPath(path.join(core.paths.gameDir(core.instances.get(id).id), sub || '')),
+  'instances.openDir': (id, sub) => {
+    const dir = path.join(core.paths.gameDir(core.instances.get(id).id), sub || '');
+    fs.mkdirSync(dir, { recursive: true });
+    return shell.openPath(dir);
+  },
   'instances.reinstall': async (id) => {
     const inst = core.instances.update(id, { versionId: null });
     return tasks.run(`Переустановка «${inst.name}»`, { instanceId: inst.id }, (t) => core.launch.ensureInstalled(inst, { onProgress: (p) => t.progress(p), signal: t.signal }).then(() => true));
@@ -283,7 +292,12 @@ const api = {
   // news
   'news.get': async () => {
     const d = await core.net.cachedJSON('https://launchercontent.mojang.com/v2/javaPatchNotes.json', 'patchnotes.json', 3600e3);
-    return d.entries.slice(0, 12).map((e) => ({ title: e.title, version: e.version, type: e.type, date: e.date, image: e.image ? 'https://launchercontent.mojang.com' + e.image.url : null, short: e.shortText }));
+    return d.entries.slice(0, 12).map((e) => ({ title: e.title, version: e.version, type: e.type, date: e.date, image: e.image ? 'https://launchercontent.mojang.com' + e.image.url : null, short: e.shortText, content: e.contentPath }));
+  },
+  'news.body': async (contentPath) => {
+    if (!/^javaPatchNotes\/[\w.-]+\.json$/.test(contentPath)) throw new Error('bad path');
+    const d = await core.net.cachedJSON('https://launchercontent.mojang.com/v2/' + contentPath, 'pn-' + contentPath.split('/')[1], 24 * 3600e3);
+    return { title: d.title, body: d.body, image: d.image ? 'https://launchercontent.mojang.com' + d.image.url : null, date: d.date };
   },
 
   // AI
@@ -311,7 +325,7 @@ function watch() {
   let t1 = null;
   try {
     fs.watch(core.paths.instances, { recursive: true }, (ev, f) => {
-      if (!f || !/instance\.json|nebula-content\.json|[\\/]mods[\\/]|resourcepacks|shaderpacks/.test(f)) return;
+      if (!f || /\.part\w*$|\.tmp$/.test(f) || !/instance\.json|nebula-content\.json|[\\/]mods[\\/]|resourcepacks|shaderpacks/.test(f)) return;
       clearTimeout(t1);
       t1 = setTimeout(() => send('instances:changed', {}), 400);
     });
@@ -341,7 +355,7 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1320, height: 840, minWidth: 1060, minHeight: 680, frame: false, show: false, backgroundColor: '#07060f',
     icon: fs.existsSync(icon) ? nativeImage.createFromPath(icon) : undefined,
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: false, spellcheck: false },
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: false, spellcheck: false, backgroundThrottling: false },
   });
   win.loadFile(path.join(__dirname, '..', 'renderer', process.env.NEBULA_PAGE || 'index.html'));
   win.once('ready-to-show', () => { if (!SHOTS) win.show(); });

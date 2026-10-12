@@ -2,7 +2,7 @@
 import { api, state, listen, refreshInstances, selectInstance } from '../api.js';
 import { h, icon, btn, busy, toast, tabs, switchEl, rangeEl, select, confirmDialog, fmtBytes, fmtDuration, timeAgo, plural, loaderBadge, LOADERS, debounce, menu } from '../ui.js';
 import { playButton, instIcon, instanceMenu } from '../components.js';
-import { iconCanvas } from '../blocks.js';
+import { iconCanvas, faceTextureUrl } from '../blocks.js';
 import { sfx } from '../sound.js';
 
 let offs = [];
@@ -33,6 +33,7 @@ export async function render(root, { id, tab: t }) {
       btn('', { icon: 'ellipsis', cls: 'icon', onclick: (e) => instanceMenu(e, inst, () => window.__nav.navigate('instances')) }),
       playButton(() => state.instances.find((i) => i.id === inst.id) || inst)));
   banner.style.setProperty('--lc', lc.color);
+  if (!String(inst.icon).startsWith('data:')) banner.style.setProperty('--tex', `url(${faceTextureUrl(inst.icon)})`);
 
   const content = h('div');
   const tabBar = tabs([

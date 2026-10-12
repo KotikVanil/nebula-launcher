@@ -18,7 +18,9 @@ module.exports.run = (win) => {
       try {
         await win.webContents.executeJavaScript(`window.__shot && window.__shot(${JSON.stringify(p)})`);
         await wait(2600);
-        const img = await win.webContents.capturePage();
+        if (process.env.SHOT_DEBUG) console.log('[dbg]', p, await win.webContents.executeJavaScript("JSON.stringify([...document.querySelectorAll('.page')].map(e => [e.className, e.childElementCount, getComputedStyle(e).opacity, e.getAnimations().map(a => [a.animationName, a.playState, Math.round(a.currentTime)]), document.timeline.currentTime|0, document.visibilityState]))"));
+        let img;
+        for (let k = 0; k < 3 && !img; k++) { try { img = await win.webContents.capturePage(); } catch { await wait(800); } }
         fs.writeFileSync(path.join(out, p.replace(/[^a-z0-9_-]/gi, '_') + '.png'), img.toPNG());
       } catch (e) { console.error('shot', p, e.message); }
     }

@@ -4,6 +4,13 @@ import { h, icon, btn, toast, tabs, fmtNum, timeAgo, debounce, md, LOADERS, load
 import { iconCanvas } from '../blocks.js';
 import { sfx } from '../sound.js';
 
+// Modrinth returns game versions unordered: keep releases, sort numerically
+function sortVersions(list) {
+  const rel = list.filter((v) => /^\d+(\.\d+)+$/.test(v));
+  const num = (v) => v.split('.').map(Number);
+  return (rel.length ? rel : list).slice().sort((a, b) => { const x = num(a), y = num(b); for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0); return 0; });
+}
+
 const view = { type: 'mod', q: '', sort: 'relevance', cats: new Set(), target: null, ignoreVersion: false };
 let installedProjects = new Set();
 let offs = [];
@@ -130,7 +137,7 @@ export async function render(root, params = {}) {
         h('.pmeta',
           h('span', icon('download'), fmtNum(p.downloads)), h('span', icon('heart'), fmtNum(p.follows)), h('span', icon('refresh-cw'), timeAgo(new Date(p.updated).getTime())),
           ...(p.categories || []).slice(0, 4).map((c) => h('span.chip', { style: { height: '22px' } }, c)))),
-      h('.pside', installBtn(p), p.versions && p.versions.length ? h('span.dim', { style: { fontSize: '11.5px' } }, p.versions[0] === p.versions[p.versions.length - 1] ? p.versions[0] : `${p.versions[0]} – ${p.versions[p.versions.length - 1]}`) : null));
+      h('.pside', installBtn(p), p.versions && p.versions.length && (p.versions = sortVersions(p.versions)).length ?h('span.dim', { style: { fontSize: '11.5px' } }, p.versions[0] === p.versions[p.versions.length - 1] ? p.versions[0] : `${p.versions[0]} – ${p.versions[p.versions.length - 1]}`) : null));
   }
 
   async function openProject(hit) {

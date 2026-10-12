@@ -1,7 +1,7 @@
 // Shared widgets: play button, instance icon, instance cards.
 import { api, state, listen, activeAccount, isRunning, refreshInstances, selectInstance } from './api.js';
 import { h, icon, toast, menu, confirmDialog, promptDialog, loaderBadge, fmtDuration, LOADERS } from './ui.js';
-import { iconCanvas } from './blocks.js';
+import { iconCanvas, faceTextureUrl } from './blocks.js';
 import { sfx } from './sound.js';
 
 export function instIcon(inst, size = 88) {
@@ -15,7 +15,7 @@ export function instIcon(inst, size = 88) {
 }
 
 function launchTask(id) {
-  return [...state.tasks.values()].find((t) => t.instanceId === id && t.status === 'running');
+  return [...state.tasks.values()].find((t) => t.instanceId === id && t.kind === 'launch' && t.status === 'running');
 }
 
 export function playButton(getInst, { small = false } = {}) {
@@ -85,6 +85,7 @@ export function instanceMenu(e, inst, after) {
 export function instCard(inst, { onOpen } = {}) {
   const lc = LOADERS[inst.loader] || LOADERS.vanilla;
   const cover = h('.inst-cover', inst.modpack && inst.modpack.icon ? h('img.modpack-ico', { src: inst.modpack.icon }) : null, instIcon(inst, 88));
+  if (!String(inst.icon).startsWith('data:')) cover.style.setProperty('--tex', `url(${faceTextureUrl(inst.icon)})`);
   const quick = h('button.inst-quick', { title: 'Играть', onclick: (e) => { e.stopPropagation(); selectInstance(inst.id); sfx('launch'); api('game.play', inst.id).catch((er) => toast(er.message, 'error')); } }, icon('play'));
   const card = h('.inst-card', { onclick: () => { sfx('click'); onOpen ? onOpen(inst) : window.__nav.navigate('instance', { id: inst.id }); }, oncontextmenu: (e) => { e.preventDefault(); instanceMenu(e, inst); }, onmouseenter: () => sfx('hover') },
     cover, quick,

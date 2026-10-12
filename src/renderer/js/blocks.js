@@ -160,6 +160,21 @@ async function applyRealTextures(blocks) {
 }
 function hasRealTextures() { return realLoaded; }
 
+// 16x16 side texture of a block as data URL (tiled pattern behind instance icons)
+const texUrlCache = new Map();
+function faceTextureUrl(id) {
+  defineTextures();
+  const face = (BLOCKS[id] || BLOCKS.grass)[1];
+  const key = face + (realLoaded ? ':real' : '');
+  if (!texUrlCache.has(key)) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 16;
+    c.getContext('2d').drawImage(T[face], 0, 0);
+    texUrlCache.set(key, c.toDataURL());
+  }
+  return texUrlCache.get(key);
+}
+
 // Mojang default skins (Steve, Alex, Ari…) from the same jar
 let defaultSkins = [];
 const defaultSkinImgs = new Map();
@@ -421,4 +436,4 @@ function proceduralSkin(seed = Date.now()) {
   return c;
 }
 
-export { applyRealTextures, hasRealTextures, setDefaultSkins, getDefaultSkins, steveImage, defineTextures, blockIcon, iconCanvas, logoCanvas, loadImage, headCanvas, bodyCanvas, generateSkin, BLOCKS, T as TEXTURES };
+export { faceTextureUrl, applyRealTextures, hasRealTextures, setDefaultSkins, getDefaultSkins, steveImage, defineTextures, blockIcon, iconCanvas, logoCanvas, loadImage, headCanvas, bodyCanvas, generateSkin, BLOCKS, T as TEXTURES };

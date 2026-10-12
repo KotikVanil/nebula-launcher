@@ -197,7 +197,7 @@ async function launch(instanceId, { accountId, onProgress, signal, quickPlay } =
       const secs = Math.round((Date.now() - entry.started) / 1000);
       try { instances.update(inst.id, { playtime: (instances.get(inst.id).playtime || 0) + secs }); } catch {}
       const report = code !== 0 ? crash.analyze(inst.id, entry.log) : null;
-      bus.emit('exit', { instanceId: inst.id, code, seconds: secs, crash: report });
+      bus.emit('exit', { instanceId: inst.id, code, seconds: secs, crash: entry.killed ? null : report, killed: !!entry.killed });
     };
     proc.on('exit', done);
     proc.on('error', (e) => { onData(Buffer.from('Ошибка запуска Java: ' + e.message + '\n')); done(-1); });
@@ -208,6 +208,7 @@ async function launch(instanceId, { accountId, onProgress, signal, quickPlay } =
 function kill(instanceId) {
   const r = running.get(instanceId);
   if (!r) return false;
+  r.killed = true;
   try { process.kill(r.proc.pid); } catch {}
   spawn('taskkill', ['/pid', String(r.proc.pid), '/T', '/F'], { windowsHide: true });
   return true;

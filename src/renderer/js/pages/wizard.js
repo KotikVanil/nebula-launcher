@@ -1,7 +1,7 @@
 // New instance wizard with live preview card.
 import { api, state, refreshInstances, selectInstance } from '../api.js';
 import { h, icon, btn, modal, toast, LOADERS, loaderBadge } from '../ui.js';
-import { iconCanvas } from '../blocks.js';
+import { iconCanvas, faceTextureUrl } from '../blocks.js';
 import { sfx } from '../sound.js';
 
 const NAMES = ['Новый мир', 'Выживание', 'Техно-сборка', 'Магия и меч', 'Строительство', 'Хардкор', 'С друзьями', 'Красота', 'Приключения'];
@@ -32,6 +32,7 @@ export async function openWizard({ firstRun = false, preset = null } = {}) {
   const drawPreview = () => {
     const l = LOADERS[s.loader];
     const cover = h('.inst-cover', iconCanvas(s.icon, 88, 88));
+    cover.style.setProperty('--tex', `url(${faceTextureUrl(s.icon)})`);
     cover.style.setProperty('--lc', l.color);
     preview.replaceChildren(cover, h('.inst-body', h('.name', s.name || 'Без имени'), h('.info', h('span.chip', s.mc), loaderBadge(s.loader), s.presets.size ? h('span.chip', icon('package'), s.presets.size + ' наб.') : null)));
     stepsEl.replaceChildren(...STEPS.map((t, i) => h('.wiz-step' + (i === s.step ? '.on' : i < s.step ? '.done' : ''), h('i', i < s.step ? '✓' : String(i + 1)), t)));

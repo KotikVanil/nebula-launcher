@@ -237,6 +237,8 @@ function setupDrop() {
 
 // ---------- boot ----------
 async function boot() {
+  const splash = h('#splash', h('.splash-logo', logoCanvas(220)), h('.splash-title', 'NEBULA'), h('.splash-bar', h('i')), h('.splash-hint', 'Загружаем мир…'));
+  document.body.append(splash);
   const app = $('#app');
   app.append(titlebar(), sidebar(), h('#main'));
   document.body.append(h('#toasts'), h('.drop-overlay', h('.box', icon('download'), h('h3', 'Бросай файлы сюда'), h('p.muted', 'PNG — скин · JAR — мод · ZIP — ресурспак/шейдер · MRPACK — сборка'))));
@@ -262,13 +264,12 @@ async function boot() {
     state.tasks.set(t.id, t);
     renderDownloads();
     emit('task', t);
-    if (t.status === 'error') toast(t.error, 'error', t.title);
   });
   on('game:start', (e) => { state.running.push({ instanceId: e.instanceId, pid: e.pid, started: Date.now() }); renderRunning(); emit('running'); sfx('launch'); });
   on('game:exit', (e) => {
     state.running = state.running.filter((r) => r.instanceId !== e.instanceId);
     renderRunning(); emit('running'); refreshInstances();
-    if (e.code !== 0 && e.code !== null && e.seconds < 36000) showCrash(e);
+    if (!e.killed && e.code !== 0 && e.code !== null) showCrash(e);
   });
   on('game:log', (batch) => emit('game:log', batch));
   on('instances:changed', () => { refreshInstances(); emit('content-changed', null); });
@@ -284,6 +285,8 @@ async function boot() {
   window.addEventListener('contextmenu', (e) => { if (!e.target.closest('input, textarea, .console, .md, .msg')) e.preventDefault(); });
 
   await navigate('home');
+  splash.classList.add('out');
+  setTimeout(() => splash.remove(), 700);
   setTimeout(() => checkForUpdates({ silent: true }), 4000);
   if (!state.accounts.list.length) setTimeout(() => openLogin({ welcome: true }), 600);
 }
