@@ -14,9 +14,23 @@ function newer(a, b) {
   return false;
 }
 
+// Fallback without the REST API (it is limited to 60 requests/hour per IP):
+// github.com/<repo>/releases/latest redirects to .../tag/vX.Y.Z, asset names are predictable.
+async function viaRedirect() {
+  const res = await core.net.request(`https://github.com/${REPO}/releases/latest`, { method: 'HEAD', redirect: 'follow' });
+  const m = /\/tag\/(v?[\d.]+)/.exec(res.url);
+  if (!m) throw new Error('Релизов пока нет');
+  const ver = m[1].replace(/^v/, '');
+  const url = `https://github.com/${REPO}/releases/download/${m[1]}/Nebula.Launcher.Setup.${ver}.exe`;
+  const head = await core.net.request(url, { method: 'HEAD', redirect: 'follow' });
+  if (!head.ok) throw new Error('В релизе нет установщика');
+  return { tag_name: m[1], html_url: res.url, body: '', assets: [{ name: `Nebula.Launcher.Setup.${ver}.exe`, size: Number(head.headers.get('content-length')) || 0, browser_download_url: url }] };
+}
+
 async function check() {
   if (!REPO) throw new Error('Репозиторий обновлений не настроен');
-  const r = await core.net.getJSON(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github+json' } });
+  let r;
+  try { r = await core.net.getJSON(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github+json' } }); } catch { r = await viaRedirect(); }
   const asset = (r.assets || []).find((a) => /setup.*\.exe$/i.test(a.name));
   const current = app.getVersion();
   return {
@@ -35,7 +49,7 @@ async function install(task) {
   let bytes = 0;
   const mb = (n) => Math.round(n / 1048576);
   await core.net.download(info.asset.url, file, {
-    size: info.asset.size, signal: task.signal,
+    size: info.asset.size || undefined, signal: task.signal,
     onBytes: (n) => { bytes += n; task.progress({ stage: `Скачивание Nebula ${info.latest} (МБ)`, done: mb(bytes), total: mb(info.asset.size) }); },
   });
   task.progress({ stage: 'Установка обновления…' });
