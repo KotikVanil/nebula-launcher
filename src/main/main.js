@@ -303,6 +303,7 @@ const api = {
   // AI
   'ai.status': () => ai.status(),
   'ai.linkClaude': () => ai.linkClaude(),
+  'ai.login': () => ai.login(),
   'ai.linkCodex': () => ai.linkCodex(),
   'ai.chat': (o) => ai.chat(o, (ev) => send('ai:event', ev)),
   'ai.stop': (id) => ai.stopChat(id),

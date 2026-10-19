@@ -56,6 +56,32 @@ function run(cmd, args, opts = {}) {
   });
 }
 
+// Map raw CLI errors to something a player understands (+ machine code for the UI)
+function friendlyError(raw) {
+  const t = String(raw || '');
+  if (/authenticate|OAuth|not logged in|login|401/i.test(t)) return { code: 'auth', error: 'Claude CLI не авторизован (сессия входа истекла). Нажми «Войти в Claude» — откроется окно входа через браузер, это нужно один раз.' };
+  if (/rate.?limit|usage limit|429|quota/i.test(t)) return { code: 'limit', error: 'Лимит Claude исчерпан. Попробуй позже или выбери модель полегче (Haiku).' };
+  if (/model/i.test(t) && /not.*(found|exist|available)|invalid/i.test(t)) return { code: 'model', error: 'Эта модель недоступна для твоего аккаунта. Выбери другую модель под чатом.' };
+  if (/ENOTFOUND|ECONN|network|fetch failed|timed? ?out/i.test(t)) return { code: 'net', error: 'Нет связи с Claude. Проверь интернет или VPN.' };
+  return { code: 'other', error: t.slice(-600) };
+}
+
+function authStatus(claude) {
+  return new Promise((resolve) => {
+    execFile(claude, ['auth', 'status', '--json'], { windowsHide: true, timeout: 15000 }, (e, out) => {
+      try { resolve(JSON.parse(String(out))); } catch { resolve(null); }
+    });
+  });
+}
+
+// Opens a visible console with "claude auth login" (browser OAuth). Needed when the CLI session expired.
+function login() {
+  const claude = findClaude();
+  if (!claude) throw new Error('Claude Code не найден');
+  spawn('cmd.exe', ['/c', `start "Claude login" "${claude}" auth login`], { detached: true, stdio: 'ignore', windowsVerbatimArguments: true }).unref();
+  return true;
+}
+
 async function status() {
   const claude = findClaude();
   const codex = findCodex();
@@ -65,7 +91,8 @@ async function status() {
     claudeLinked = !!(cj.mcpServers && cj.mcpServers.nebula);
   } catch {}
   try { codexLinked = /\[mcp_servers\.nebula\]/.test(fs.readFileSync(path.join(os.homedir(), '.codex', 'config.toml'), 'utf8')); } catch {}
-  return { claude: !!claude, claudePath: claude, codex: !!codex, claudeLinked, codexLinked, mcp: mcpServerConfig() };
+  const auth = claude ? await authStatus(claude) : null;
+  return { claude: !!claude, claudePath: claude, claudeLoggedIn: !!(auth && auth.loggedIn), authMethod: auth && auth.authMethod, codex: !!codex, claudeLinked, codexLinked, mcp: mcpServerConfig() };
 }
 
 async function linkClaude() {
@@ -129,6 +156,7 @@ function chat({ chatId, prompt, sessionId, model, instanceId }, send) {
   proc.stdin.write(prompt + ctx);
   proc.stdin.end();
   let buf = '';
+  let gotResult = false;
   proc.stdout.on('data', (d) => {
     buf += d.toString();
     let i;
@@ -145,7 +173,8 @@ function chat({ chatId, prompt, sessionId, model, instanceId }, send) {
       } else if (ev.type === 'user' && ev.message && Array.isArray(ev.message.content)) {
         for (const c of ev.message.content) if (c.type === 'tool_result') send({ chatId, type: 'tool_done', error: !!c.is_error });
       } else if (ev.type === 'result') {
-        send({ chatId, type: 'done', sessionId: ev.session_id, cost: ev.total_cost_usd, error: ev.is_error ? (ev.result || 'ошибка') : null });
+        gotResult = true;
+        send({ chatId, type: 'done', sessionId: ev.session_id, cost: ev.total_cost_usd, ...(ev.is_error ? friendlyError(ev.result) : {}) });
       } else if (ev.type === 'system' && ev.subtype === 'init') {
         send({ chatId, type: 'init', sessionId: ev.session_id, model: ev.model });
       }
@@ -155,7 +184,8 @@ function chat({ chatId, prompt, sessionId, model, instanceId }, send) {
   proc.stderr.on('data', (d) => { err += d.toString(); });
   proc.on('close', (code) => {
     chats.delete(chatId);
-    if (code !== 0) send({ chatId, type: 'done', error: (err || `Claude завершился с кодом ${code}`).slice(-600) });
+    // the result event already carried the real reason; only report bare exits
+    if (code !== 0 && !gotResult) send({ chatId, type: 'done', ...friendlyError(err || `Claude завершился с кодом ${code}`) });
   });
   return { started: true };
 }
@@ -165,4 +195,4 @@ function stopChat(chatId) {
   if (c) { try { spawn('taskkill', ['/pid', String(c.proc.pid), '/T', '/F'], { windowsHide: true }); } catch {} }
 }
 
-module.exports = { status, linkClaude, linkCodex, chat, stopChat, mcpServerConfig, findClaude, SYSTEM_PROMPT };
+module.exports = { status, login, friendlyError, linkClaude, linkCodex, chat, stopChat, mcpServerConfig, findClaude, SYSTEM_PROMPT };

@@ -59,6 +59,7 @@ export async function render(root, params = {}) {
     if (m.text) el.append(h('div', { html: md(m.text) }));
     else if (!m.done && !m.tools.length) el.append(h('.typing', h('i'), h('i'), h('i')));
     if (m.error) el.append(h('p', { style: { color: '#fecaca' } }, m.error));
+    if (m.code === 'auth') el.append(h('.row', { style: { marginTop: '8px' } }, btn('Войти в Claude', { icon: 'log-in', cls: 'primary sm', onclick: startLogin })));
     return el;
   }
   function drawMsgs() {
@@ -81,6 +82,11 @@ export async function render(root, params = {}) {
     if (!text || chat.busy) return;
     const st = await api('ai.status');
     if (!st.claude) return toast('Claude Code не найден. Установи Claude Desktop/Claude Code — или подключи свой ИИ справа.', 'error');
+    if (!st.claudeLoggedIn) {
+      chat.messages.push({ role: 'user', text }, { role: 'bot', text: '', tools: [], done: true, code: 'auth', error: 'Claude CLI не авторизован. Нажми «Войти в Claude» — откроется окно входа через браузер, это нужно один раз. Потом отправь сообщение снова.' });
+      input.value = ''; drawMsgs(); sfx('error');
+      return;
+    }
     input.value = ''; input.style.height = 'auto';
     chat.messages.push({ role: 'user', text });
     const bot = { role: 'bot', text: '', tools: [], done: false };
@@ -106,12 +112,24 @@ export async function render(root, params = {}) {
     if (ev.type === 'done') {
       bot.done = true; bot.tools.forEach((t) => (t.done = true));
       if (ev.sessionId) chat.sessionId = ev.sessionId;
-      if (ev.error && !bot.text) bot.error = ev.error;
+      if (ev.error && !bot.text) { bot.error = ev.error; bot.code = ev.code; }
       setBusy(false); refreshInstances();
       sfx(ev.error ? 'error' : 'success');
     }
     redraw();
   }));
+
+  // Opens "claude auth login" in a console window and waits until the CLI reports loggedIn
+  async function startLogin() {
+    try { await api('ai.login'); } catch (e) { return toast(e.message, 'error'); }
+    toast('Войди в открывшемся окне (браузер спросит доступ). Лаунчер сам заметит вход.', 'info', 'Вход в Claude');
+    for (let i = 0; i < 60; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      if (!root.isConnected) return;
+      const st = await api('ai.status').catch(() => null);
+      if (st && st.claudeLoggedIn) { toast('Claude подключён, можно писать', 'ok', 'Готово'); drawSide(); return; }
+    }
+  }
 
   // ---------- side: integrations ----------
   async function drawSide() {
@@ -124,8 +142,12 @@ export async function render(root, params = {}) {
     const cfg = JSON.stringify({ mcpServers: { nebula: st.mcp } }, null, 2);
     const activity = h('.activity');
     side.replaceChildren(
-      h('.card.int-card', h('.head', h('.logo-box', { style: { background: 'linear-gradient(135deg,#d97757,#b85c3c)' } }, 'C'), h('.grow', h('b', 'Claude Code'), h('div', status(st.claude, st.claudeLinked)))),
-        h('p.muted', { style: { fontSize: '12.5px', marginBottom: '10px' } }, 'Даст Claude Code инструменты лаунчера (MCP). Встроенный чат слева работает и без этого.'), st.claude ? linkClaude : null),
+      h('.card.int-card', h('.head', h('.logo-box', { style: { background: 'linear-gradient(135deg,#d97757,#b85c3c)' } }, 'C'), h('.grow', h('b', 'Claude Code'), h('div', status(st.claude, st.claudeLinked)),
+          st.claude ? h('span.status-dot' + (st.claudeLoggedIn ? '.on' : '.mid'), st.claudeLoggedIn ? 'вход выполнен' : 'нужен вход') : null)),
+        h('p.muted', { style: { fontSize: '12.5px', marginBottom: '10px' } }, 'Встроенный чат работает через Claude CLI. «Подключить» даёт лаунчер ещё и обычному Claude Code (MCP).'),
+        h('.row.wrap', { style: { gap: '8px' } },
+          st.claude && !st.claudeLoggedIn ? btn('Войти в Claude', { icon: 'log-in', cls: 'primary sm', onclick: startLogin }) : null,
+          st.claude ? linkClaude : null)),
       h('.card.int-card', h('.head', h('.logo-box', { style: { background: 'linear-gradient(135deg,#10a37f,#0b6e56)' } }, 'GPT'), h('.grow', h('b', 'Codex CLI'), h('div', status(st.codex, st.codexLinked)))),
         h('p.muted', { style: { fontSize: '12.5px', marginBottom: '10px' } }, 'Добавит сервер nebula в ~/.codex/config.toml (старый файл сохранится как .nebula-backup).'), linkCodex),
       h('.card.int-card', h('.head', h('.logo-box', { style: { background: 'var(--grad)', color: '#0a0816' } }, icon('cpu')), h('.grow', h('b', 'Любой другой ИИ'), h('.muted', { style: { fontSize: '12px' } }, 'Cursor, Windsurf, Gemini CLI…'))),
