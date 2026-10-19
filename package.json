@@ -1,7 +1,7 @@
 {
   "name": "nebula-launcher",
   "productName": "Nebula Launcher",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Minecraft launcher with instances, Modrinth, skins and an AI modpack workshop",
   "main": "src/main/main.js",
   "author": "IVAN",

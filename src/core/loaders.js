@@ -90,6 +90,8 @@ async function installLoader(loader, mc, loaderVersion, { onProgress, signal, th
   const progress = (stage, extra = {}) => onProgress && onProgress({ stage, ...extra });
   if (!loader || loader === 'vanilla') return mc;
   if (!loaderVersion) loaderVersion = await pickVersion(loader, mc);
+  // .mrpack files from other launchers write NeoForge-for-1.20.1 as "47.1.x"; its maven name is "1.20.1-47.1.x"
+  if (loader === 'neoforge' && mc === '1.20.1' && !/^1\.20\.1-/.test(loaderVersion)) loaderVersion = '1.20.1-' + loaderVersion;
 
   if (loader === 'fabric' || loader === 'quilt') {
     const url = loader === 'fabric'

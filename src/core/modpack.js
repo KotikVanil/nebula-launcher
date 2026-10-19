@@ -8,6 +8,7 @@ const net = require('./net');
 const instances = require('./instances');
 const content = require('./content');
 const modrinth = require('./modrinth');
+const loaders = require('./loaders');
 const { hashFile, safeJoin, exists } = require('./util');
 
 // ---------- presets: one click groups of mods; slugs are tried in order, first available wins ----------
@@ -161,7 +162,11 @@ async function exportMrpack(instanceId, outFile, { includeConfigs = true, versio
   if (key) {
     let lv = inst.loaderVersion;
     if (!lv && inst.versionId) lv = inst.versionId.replace(/^.*?(?:fabric-loader-|quilt-loader-|forge-|neoforge-)/, '').replace(new RegExp('-' + inst.mc.replace(/\./g, '\\.') + '$'), '');
-    deps[key] = lv;
+    // "Auto" loader and never launched: resolve the version the launcher would install,
+    // other launchers (Prism, Modrinth App) reject a pack without a string version here
+    if (!lv) lv = await loaders.pickVersion(inst.loader, inst.mc);
+    // NeoForge for 1.20.1 is listed as "1.20.1-47.1.x"; the mrpack format wants "47.1.x"
+    deps[key] = String(lv).replace(new RegExp('^' + inst.mc.replace(/\./g, '\\.') + '-'), '');
   }
   const index = { formatVersion: 1, game: 'minecraft', versionId: version, name: inst.name, summary: summary || inst.notes || undefined, files, dependencies: deps };
   zip.addFile('modrinth.index.json', Buffer.from(JSON.stringify(index, null, 2)));
